@@ -1,0 +1,2 @@
+json_key_file("") # Provided via PLAY_STORE_JSON_KEY env var in CI
+package_name("com.kamililabs.kamili_social")
