@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:http/http.dart' as http;
 
 import 'package:kamili_social/config/constants.dart';
+import 'package:kamili_social/config/env.dart';
 import 'package:kamili_social/graphql/client.dart';
 import 'package:kamili_social/graphql/mutations/auth_mutations.dart';
 import 'package:kamili_social/graphql/queries/account_queries.dart';
@@ -137,28 +139,46 @@ class AuthService {
   }
 
   /// Refreshes the access and refresh tokens. Returns true on success.
+  /// Uses a raw HTTP call to bypass the GraphQL link chain, which would
+  /// attach the (expired) access token instead of the refresh token.
   Future<bool> refreshTokens() async {
     try {
-      final result = await _client.mutate(
-        MutationOptions(
-          document: gql(refreshTokenMutation),
-        ),
+      final refreshToken =
+          await _storage.read(AppConstants.refreshTokenKey);
+
+      if (refreshToken == null || TokenUtils.isTokenExpired(refreshToken)) {
+        return false;
+      }
+
+      final response = await http.post(
+        Uri.parse(Env.graphqlEndpoint),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $refreshToken',
+        },
+        body: jsonEncode({
+          'query': refreshTokenMutation,
+        }),
       );
 
-      if (result.hasException) return false;
+      if (response.statusCode != 200) return false;
 
-      final data = result.data?['refreshToken'] as Map<String, dynamic>?;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = body['data'] as Map<String, dynamic>?;
       if (data == null) return false;
 
-      if (data['__typename'] == 'Error') return false;
+      final result = data['refreshToken'] as Map<String, dynamic>?;
+      if (result == null) return false;
 
-      final accessToken = data['accessToken'] as String?;
-      final refreshToken = data['refreshToken'] as String?;
+      if (result['__typename'] == 'Error') return false;
 
-      if (accessToken == null || refreshToken == null) return false;
+      final newAccessToken = result['accessToken'] as String?;
+      final newRefreshToken = result['refreshToken'] as String?;
 
-      await _storage.write(AppConstants.accessTokenKey, accessToken);
-      await _storage.write(AppConstants.refreshTokenKey, refreshToken);
+      if (newAccessToken == null || newRefreshToken == null) return false;
+
+      await _storage.write(AppConstants.accessTokenKey, newAccessToken);
+      await _storage.write(AppConstants.refreshTokenKey, newRefreshToken);
 
       return true;
     } catch (e) {

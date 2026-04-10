@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -36,26 +38,47 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(AppConstants.splashDuration);
+    // Wait for minimum splash duration and onboarding check in parallel
+    final results = await Future.wait([
+      Future.delayed(AppConstants.splashDuration),
+      SharedPreferences.getInstance(),
+    ]);
     if (!mounted) return;
 
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = results[1] as SharedPreferences;
     final onboardingComplete =
         prefs.getBool(AppConstants.onboardingCompleteKey) ?? false;
-
-    if (!mounted) return;
 
     if (!onboardingComplete) {
       context.go(RoutePaths.onboarding);
       return;
     }
 
-    final authState = ref.read(authProvider);
+    // Wait for auth initialization to complete before navigating
+    final authState = await _waitForAuthReady();
+    if (!mounted) return;
+
     if (authState is Authenticated) {
       context.go(RoutePaths.dashboard);
     } else {
       context.go(RoutePaths.login);
     }
+  }
+
+  /// Returns the resolved auth state, waiting if still loading.
+  Future<AuthState> _waitForAuthReady() async {
+    final current = ref.read(authProvider);
+    if (current is! AuthLoading) return current;
+
+    final completer = Completer<AuthState>();
+    final sub = ref.listenManual(authProvider, (_, next) {
+      if (next is! AuthLoading && !completer.isCompleted) {
+        completer.complete(next);
+      }
+    });
+    final result = await completer.future;
+    sub.close();
+    return result;
   }
 
   @override
