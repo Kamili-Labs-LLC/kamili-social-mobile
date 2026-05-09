@@ -42,3 +42,23 @@ Media uploads and AI generation use REST endpoints (not GraphQL).
 ## Branding Colors
 - Primary: #2088C6 | Dark: #1A6FA3 | Accent: #5BADD6
 - CTA Red: #E03035 | Background: #FAFBFC | Text: #1D2327
+
+---
+
+## §30 — Pre-PR local gate (STRICT, no exceptions)
+
+**No `gh pr create` may run until all three checks pass locally in this repo.**
+
+```bash
+pnpm lint && pnpm typecheck && flutter test
+```
+
+Run them in order — a failure in any step must be fixed before the PR is opened.
+
+1. **Lint** — `pnpm lint` — zero errors, zero warnings
+2. **Type-check** — `pnpm typecheck` — zero type errors
+3. **Tests + coverage** — `flutter test` — all tests pass. Flutter: `flutter test --coverage`; confirm lcov.info coverage meets the ≥60% threshold.
+
+**Why this exists:** CI is a safety net, not a first-run environment. A GitHub Actions run that fails is a §30 violation because it means local checks were skipped. Fix it locally, then open the PR.
+
+**Exceptions:** PRs that change only `*.md`, `*.json` config, or `docs/` files may skip step 3 (coverage) but must still pass lint and type-check if the repo has them configured.
