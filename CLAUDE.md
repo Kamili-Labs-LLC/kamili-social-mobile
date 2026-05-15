@@ -1,5 +1,3 @@
-# Claude Instructions
-
-This file is a compatibility shim for Claude.
-
-Read `AGENTS.md` in this directory for the canonical instructions and context before making changes.
+# Deprecated instruction file
+This file is intentionally a compatibility shim.
+Please use AGENTS.md in this same directory for canonical instructions.
