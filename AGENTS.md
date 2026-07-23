@@ -20,7 +20,7 @@ Flutter mobile app (iOS + Android) for the Kamili Social platform.
 - `lib/widgets/` — Reusable widget library (KamiliButton, KamiliTextField, PostCard, etc.)
 - `lib/router/` — GoRouter config with auth redirect
 - `scripts/build.sh` — Build utility with version bumping
-- `.github/workflows/` — CI/CD for develop (internal testing) and production
+- `.github/workflows/` — CI/CD for production releases (tag-triggered)
 
 ## Key Commands
 ```bash
