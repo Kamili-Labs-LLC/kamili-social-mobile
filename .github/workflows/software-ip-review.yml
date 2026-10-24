@@ -1,0 +1,57 @@
+name: Software IP review
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  provenance:
+    name: Provenance declaration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR declaration
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          body = os.environ.get('PR_BODY', '')
+          section = re.search(r'(?im)^## Software IP review\s*$', body)
+          tail = body[section.end():] if section else ''
+          tail = re.split(r'(?m)^## ', tail, maxsplit=1)[0]
+          completed = re.search(r'(?im)^- \[x\] I reviewed source and dependency provenance\s*$', tail)
+          addition = re.search(r'(?im)^Third-party additions:\s*(none|documented)\s*$', tail)
+          dependencies = re.search(r'(?im)^Dependency license review:\s*(completed|not applicable)\s*$', tail)
+          sources = re.search(r'(?im)^Sources and licenses:\s*(.+)$', tail)
+          valid = bool(completed and addition and dependencies)
+          if addition and addition.group(1).lower() == 'documented':
+              valid = valid and bool(sources and re.search(r'https?://', sources.group(1)) and re.search(r'https?://\S+\s*\|\s*[A-Za-z0-9.+-]+', sources.group(1)))
+          if not valid:
+              print('::error::Complete the Software IP review section: check the review box, choose third-party additions and dependency review, and provide source URL and license for documented material. See Kamili Central software-ip-provenance.md.')
+              sys.exit(1)
+          print('PR contains a Software IP review declaration. The reviewer must verify it against the diff and license report.')
+          PY
+  license-inventory:
+    name: Dependency license inventory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan repository package metadata
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: license
+          format: json
+          output: software-ip-licenses.json
+          exit-code: '0'
+      - name: Publish license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: software-ip-licenses
+          path: software-ip-licenses.json
+          if-no-files-found: error
+          retention-days: 90
